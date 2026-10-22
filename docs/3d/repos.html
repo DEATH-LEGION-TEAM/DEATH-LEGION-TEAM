@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Death Legion - interactive 3D</title>
+<meta name="description" content="Death Legion Team, Sri Lanka. Interactive 3D map of our repos: AI agents, kernels, panels, Android, web.">
+<style>
+html,body{margin:0;height:100%;background:#09090b;overflow:hidden;font-family:Consolas,Menlo,monospace;color:#e0c3ff}
+#hud{position:fixed;left:16px;top:14px;pointer-events:none}
+#hud h1{margin:0;font-size:18px;letter-spacing:4px}
+#hud p{margin:4px 0 0;font-size:12px;color:#9b8ac4}
+#tip{position:fixed;padding:6px 10px;background:#151022cc;border:1px solid #8a2be2;border-radius:6px;font-size:12px;pointer-events:none;display:none}
+</style></head><body>
+<div id="hud"><h1>DEATH LEGION</h1><p>drag: orbit / scroll: zoom / click a node: open repo</p></div>
+<div id="tip"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const R='https://github.com/deathlegionteamlk/';
+const groups=[
+ ['AI agents',0xdc2626,[['Fraction','Fraction'],['legion-code','legion-code'],['herolaw','herolaw'],['legionhbt','legionhbt'],['legiontret','legiontret']]],
+ ['Kernels',0xfbbf24,[['Herojuk','Herojuk'],['LegionBFOS','LegionBFOS'],['Idris kernel','legion-idris-kernel'],['Brainfuck OS','Brainfuck-OS-kernel']]],
+ ['Panels',0x2496ed,[['legiondactyl','legiondactyl-clean'],['demoxhexadctyl','demoxhexadctyl'],['ptredactyl','ptredactyl-installer']]],
+ ['Android',0x3ddc84,[['LiyoBoard','LiyoBoard'],['Legion-K-Player','Legion-K-Player'],['uytr','uytr']]],
+ ['Web & infra',0x9b5cf0,[['herodb','herodb'],['herobase','herobase'],['dliy-io','dliy-io'],['HeroBrowser','HeroBrowser'],['legion-hutta','legion-hutta']]],
+];
+const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0x09090b,0.018);
+const cam=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,200);cam.position.set(0,6,20);
+const ren=new THREE.WebGLRenderer({antialias:true});ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.setSize(innerWidth,innerHeight);document.body.appendChild(ren.domElement);
+const ctl=new OrbitControls(cam,ren.domElement);ctl.enableDamping=true;ctl.autoRotate=true;ctl.autoRotateSpeed=.6;
+// core
+const core=new THREE.Mesh(new THREE.IcosahedronGeometry(2.2,1),new THREE.MeshBasicMaterial({color:0xc9a2ff,wireframe:true}));scene.add(core);
+const knot=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.25,120,12,3,2),new THREE.MeshBasicMaterial({color:0xdc2626,wireframe:true,transparent:true,opacity:.5}));scene.add(knot);
+// stars
+const sp=new Float32Array(1500*3);for(let i=0;i<sp.length;i++)sp[i]=(Math.random()-.5)*120;
+const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+const stars=new THREE.Points(sg,new THREE.PointsMaterial({color:0x8a2be2,size:.12}));scene.add(stars);
+function label(t,col){const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');x.font='bold 26px Consolas,monospace';x.textAlign='center';x.fillStyle='#'+col.toString(16).padStart(6,'0');x.shadowColor=x.fillStyle;x.shadowBlur=8;x.fillText(t,128,40);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));s.scale.set(4,1,1);return s}
+const nodes=[],rings=[];
+groups.forEach(([name,col,repos],gi)=>{
+ const r=5+gi*1.9,tilt=(gi-2)*.28;const g=new THREE.Group();g.rotation.x=tilt;g.rotation.z=gi*.4;scene.add(g);
+ const ring=new THREE.Mesh(new THREE.RingGeometry(r-.02,r+.02,128),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.35,side:THREE.DoubleSide}));ring.rotation.x=Math.PI/2;g.add(ring);
+ const pivot=new THREE.Group();g.add(pivot);rings.push({pivot,speed:.0025/(1+gi*.3)*(gi%2?-1:1)});
+ const title=label(name.toUpperCase(),col);title.position.set(r,1.1,0);pivot.add(title);
+ repos.forEach(([txt,repo],i)=>{
+  const a=(i/repos.length)*Math.PI*2;
+  const m=new THREE.Mesh(new THREE.OctahedronGeometry(.32,0),new THREE.MeshBasicMaterial({color:col}));
+  m.position.set(Math.cos(a)*r,0,Math.sin(a)*r);m.userData={url:R+repo,txt,col};pivot.add(m);nodes.push(m);
+  const l=label(txt,col);l.position.copy(m.position).add(new THREE.Vector3(0,.8,0));pivot.add(l);
+ });
+});
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2(),tip=document.getElementById('tip');let hover=null;
+addEventListener('pointermove',e=>{mouse.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);tip.style.left=e.clientX+14+'px';tip.style.top=e.clientY+14+'px'});
+addEventListener('click',()=>{if(hover)open(hover.userData.url,'_blank')});
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();ren.setSize(innerWidth,innerHeight)});
+const clock=new THREE.Clock();
+(function loop(){requestAnimationFrame(loop);const t=clock.getElapsedTime();
+ core.rotation.y=t*.4;core.rotation.x=t*.2;knot.rotation.y=-t*.6;knot.rotation.z=t*.3;stars.rotation.y=t*.01;
+ rings.forEach(o=>o.pivot.rotation.y+=o.speed);
+ nodes.forEach((n,i)=>{n.rotation.y=t*2;n.rotation.x=t;n.scale.setScalar(n===hover?1.8:1+Math.sin(t*2+i)*.12)});
+ ray.setFromCamera(mouse,cam);const h=ray.intersectObjects(nodes)[0];hover=h?h.object:null;
+ tip.style.display=hover?'block':'none';if(hover){tip.textContent=hover.userData.txt+' \u2192 github';ren.domElement.style.cursor='pointer'}else ren.domElement.style.cursor='grab';
+ ctl.update();ren.render(scene,cam)})();
+</script></body></html>

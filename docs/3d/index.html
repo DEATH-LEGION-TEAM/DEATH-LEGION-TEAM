@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Death Legion 3D</title>
+<style>
+html,body{margin:0;height:100%;background:#09090b;overflow:hidden;font-family:Consolas,Menlo,monospace;color:#e0c3ff}
+#bar{position:fixed;left:0;right:0;top:0;display:flex;flex-wrap:wrap;gap:6px;padding:10px;justify-content:center;z-index:2}
+button,a.b{background:#151022cc;color:#e0c3ff;border:1px solid #8a2be288;border-radius:6px;padding:6px 10px;font:12px Consolas,Menlo,monospace;cursor:pointer;text-decoration:none}
+button:hover,a.b:hover,button.on{background:#8a2be2;color:#fff}
+canvas{display:block}
+</style></head><body>
+<div id="bar"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {ParametricGeometry} from 'three/addons/geometries/ParametricGeometry.js';
+const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0x09090b,.04);
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,100);cam.position.set(0,1.2,6);
+const ren=new THREE.WebGLRenderer({antialias:true});ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.setSize(innerWidth,innerHeight);document.body.appendChild(ren.domElement);
+const ctl=new OrbitControls(cam,ren.domElement);ctl.enableDamping=true;ctl.autoRotate=true;ctl.autoRotateSpeed=1.2;ctl.minDistance=2.5;ctl.maxDistance=14;
+const sp=new Float32Array(1200*3);for(let i=0;i<sp.length;i++)sp[i]=(Math.random()-.5)*50;
+const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+const stars=new THREE.Points(sg,new THREE.PointsMaterial({color:0x8a2be2,size:.05}));scene.add(stars);
+const floor=new THREE.Mesh(new THREE.RingGeometry(2.2,2.25,96),new THREE.MeshBasicMaterial({color:0x8a2be2,side:THREE.DoubleSide,transparent:true,opacity:.5}));floor.rotation.x=Math.PI/2;floor.position.y=-2.2;scene.add(floor);
+const front=new THREE.LineBasicMaterial({color:0xc9a2ff}),back=new THREE.LineBasicMaterial({color:0xdc2626,transparent:true,opacity:.35});
+const wire=g=>new THREE.LineSegments(g,front);
+const edges=g=>wire(new THREE.EdgesGeometry(g));
+const wf=g=>wire(new THREE.WireframeGeometry(g));
+const dots=(g,c=0xfbbf24)=>new THREE.Points(g,new THREE.PointsMaterial({color:c,size:.07}));
+let tess;
+const defs={
+ icosahedron:()=>edges(new THREE.IcosahedronGeometry(1.8,0)),
+ knot:()=>wf(new THREE.TorusKnotGeometry(1.2,.32,160,12,3,2)),
+ globe:()=>{const g=new THREE.Group();g.add(wf(new THREE.SphereGeometry(1.8,18,12)));const la=7.5*Math.PI/180,lo=80.7*Math.PI/180;
+  const m=new THREE.Mesh(new THREE.SphereGeometry(.08,12,12),new THREE.MeshBasicMaterial({color:0xfbbf24}));m.position.set(1.8*Math.cos(la)*Math.cos(lo),1.8*Math.sin(la),-1.8*Math.cos(la)*Math.sin(lo));g.add(m);g.userData.pulse=m;return g},
+ cube:()=>edges(new THREE.BoxGeometry(2.4,2.4,2.4)),
+ octahedron:()=>edges(new THREE.OctahedronGeometry(2)),
+ dodecahedron:()=>edges(new THREE.DodecahedronGeometry(1.8)),
+ torus:()=>wf(new THREE.TorusGeometry(1.5,.55,14,30)),
+ mobius:()=>wf(new ParametricGeometry((u,v,t)=>{u*=2*Math.PI;v=(v-.5)*1.4;const k=1+v/2*Math.cos(u/2);t.set(k*Math.cos(u)*1.5,v/2*Math.sin(u/2)*1.5,k*Math.sin(u)*1.5)},64,8)),
+ pyramid:()=>edges(new THREE.ConeGeometry(1.9,3,4)),
+ tesseract:()=>{const V=[];for(let i=0;i<16;i++)V.push([i&1?1:-1,i&2?1:-1,i&4?1:-1,i&8?1:-1]);const E=[];
+  for(let i=0;i<16;i++)for(let j=i+1;j<16;j++){let d=0;for(let k=0;k<4;k++)if(V[i][k]!==V[j][k])d++;if(d===1)E.push([i,j])}
+  const pos=new Float32Array(E.length*6),g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const o=wire(g);o.userData.tess={V,E,pos,g};tess=o.userData.tess;return o},
+ dna:()=>{const P=[],n=70,s=(i,o)=>{const a=i*.32+o;return[Math.cos(a)*1,(i/n-.5)*4.2,Math.sin(a)*1]};
+  for(const o of[0,Math.PI])for(let i=0;i<n;i++)P.push(...s(i,o),...s(i+1,o));
+  for(let i=0;i<=n;i+=2)P.push(...s(i,0),...s(i,Math.PI));
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));return wire(g)}
+};
+let cur=null,tmesh=null;
+function show(name){
+ if(cur)scene.remove(cur);tess=null;cur=defs[name]();scene.add(cur);
+ [...document.querySelectorAll('#bar button')].forEach(b=>b.classList.toggle('on',b.dataset.k===name));location.hash=name;
+}
+const bar=document.getElementById('bar');
+Object.keys(defs).forEach((k,i)=>{const b=document.createElement('button');b.textContent=k;b.dataset.k=k;b.onclick=()=>show(k);bar.appendChild(b)});
+const sb=document.createElement('button');sb.textContent='spin';sb.onclick=()=>{ctl.autoRotate=!ctl.autoRotate;sb.classList.toggle('on',ctl.autoRotate)};sb.classList.add('on');bar.appendChild(sb);
+const rb=document.createElement('a');rb.className='b';rb.href='repos.html';rb.textContent='repos';bar.appendChild(rb);
+addEventListener('keydown',e=>{const ks=Object.keys(defs),i=ks.indexOf(location.hash.slice(1));if(e.key==='ArrowRight')show(ks[(i+1)%ks.length]);if(e.key==='ArrowLeft')show(ks[(i-1+ks.length)%ks.length]);if(e.key===' ')sb.click()});
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();ren.setSize(innerWidth,innerHeight)});
+const mouse=new THREE.Vector2();addEventListener('pointermove',e=>mouse.set(e.clientX/innerWidth-.5,e.clientY/innerHeight-.5));
+const clock=new THREE.Clock();
+function loop(){requestAnimationFrame(loop);const t=clock.getElapsedTime();
+ stars.rotation.y=t*.02+mouse.x*.3;stars.rotation.x=mouse.y*.2;floor.rotation.z=t*.3;
+ if(cur){cur.scale.setScalar(1+Math.sin(t*1.5)*.02);if(cur.userData.pulse){const s=1+Math.abs(Math.sin(t*3))*1.5;cur.userData.pulse.scale.setScalar(s)}}
+ if(tess){const a=t*.6,c=Math.cos(a),s=Math.sin(a),P=[];
+  for(const v of tess.V){let[x,y,z,w]=v;let x2=x*c-w*s,w2=x*s+w*c;let z2=z*c-w2*s;w2=z*s+w2*c;const k=1.8/(2.6-w2);P.push([x2*k,y*k,z2*k])}
+  tess.E.forEach(([i,j],n)=>{tess.pos.set(P[i],n*6);tess.pos.set(P[j],n*6+3)});tess.g.attributes.position.needsUpdate=true}
+ ctl.update();ren.render(scene,cam)}
+show(location.hash.slice(1) in defs?location.hash.slice(1):'icosahedron');loop();
+</script></body></html>
